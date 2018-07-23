@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import org.locationtech.geogig.model.ObjectId;
 import org.locationtech.geogig.model.RevTree;
@@ -108,12 +109,12 @@ class DAG implements Cloneable, Serializable {
     }
 
     DAG(final TreeId id, final ObjectId originalTreeId, long childCount, STATE state,
-            Set<NodeId> children, Set<TreeId> buckets) {
+            Map<String, NodeId> children, Set<TreeId> buckets) {
         this.id = id;
         this.originalTreeId = originalTreeId;
         this.setTotalChildCount(childCount);
         this.state = state;
-        this.children = new HashMap<>(Maps.uniqueIndex(children, (n) -> n.name()));
+        this.children = children;
         this.buckets = buckets;
     }
 
@@ -318,14 +319,14 @@ class DAG implements Cloneable, Serializable {
         final int childrenSize = in.readInt();
         final int bucketSize = in.readShort();
 
-        Set<NodeId> children = ImmutableSet.of();
+        Map<String, NodeId> children = ImmutableMap.of();
         Set<TreeId> buckets = ImmutableSet.of();
 
         if (childrenSize > 0) {
-            children = new HashSet<>();
+            children = new HashMap<>();
             for (int i = 0; i < childrenSize; i++) {
                 NodeId nid = NodeId.read(in);
-                children.add(nid);
+                children.put(nid.name(), nid);
             }
         }
         if (bucketSize > 0) {

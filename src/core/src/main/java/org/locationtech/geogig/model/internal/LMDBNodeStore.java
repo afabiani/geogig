@@ -44,6 +44,8 @@ class LMDBNodeStore {
 
     private @NonNull DirectByteBufferPool valuebuffers;
 
+    private final int dirtyThreshold = 100_000;
+
     private final Map<NodeId, DAGNode> dirty = new ConcurrentHashMap<>();
 
     private final ExecutorService storeExecutor = Executors.newFixedThreadPool(16);
@@ -103,7 +105,7 @@ class LMDBNodeStore {
 
     public void put(NodeId nodeId, DAGNode node) {
         dirty.put(nodeId, node);
-        if (dirty.size() >= 1e5) {
+        if (dirty.size() >= dirtyThreshold) {
             flush();
         }
     }
@@ -136,7 +138,7 @@ class LMDBNodeStore {
 
     public void putAll(Map<NodeId, DAGNode> nodeMappings) {
         dirty.putAll(nodeMappings);
-        if (dirty.size() >= 1e5) {
+        if (dirty.size() >= dirtyThreshold) {
             flush();
         }
     }

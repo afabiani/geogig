@@ -20,6 +20,8 @@ import org.eclipse.jdt.annotation.Nullable;
 import org.locationtech.geogig.model.FieldType;
 import org.locationtech.geogig.storage.datastream.DataStreamValueSerializerV2;
 
+import com.google.common.base.Charsets;
+
 class NodeId {
 
     protected final String name;
@@ -58,7 +60,7 @@ class NodeId {
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, value);
+        return 31 * name.hashCode() + (value == null ? 0 : value.hashCode());
     }
 
     @Override
@@ -76,13 +78,18 @@ class NodeId {
 
         final FieldType valueType = FieldType.forValue((Object) id.value());
 
-        out.writeUTF(name);
+        byte[] nameBytes = name.getBytes(Charsets.UTF_8);
+        out.writeShort(nameBytes.length);
+        out.write(nameBytes);
         out.writeByte(valueType.ordinal());
         DataStreamValueSerializerV2.INSTANCE.encode(valueType, value, out);
     }
 
     public static NodeId read(DataInput in) throws IOException {
-        final String name = in.readUTF();
+        byte[] nameBytes = new byte[in.readShort()];
+        in.readFully(nameBytes);
+        final String name = new String(nameBytes, Charsets.UTF_8);
+
         FieldType type = FieldType.valueOf(in.readUnsignedByte());
         final Object val = DataStreamValueSerializerV2.INSTANCE.decode(type, in);
         return new NodeId(name, val);

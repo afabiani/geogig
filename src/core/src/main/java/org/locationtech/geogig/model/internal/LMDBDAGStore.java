@@ -12,11 +12,12 @@ package org.locationtech.geogig.model.internal;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.eclipse.jdt.annotation.Nullable;
 import org.lmdbjava.Dbi;
@@ -24,7 +25,6 @@ import org.lmdbjava.Env;
 import org.lmdbjava.Txn;
 import org.locationtech.geogig.model.ObjectId;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
@@ -40,6 +40,10 @@ class LMDBDAGStore {
     private @NonNull Dbi<ByteBuffer> db;
 
     private @NonNull DirectByteBufferPool keybuffers, valuebuffers;
+
+    private final int dirtyThreshold = 10_000;
+
+    private final Map<TreeId, DAG> dirty = new ConcurrentHashMap<>();
 
     public void close() {
         env = null;
@@ -58,11 +62,13 @@ class LMDBDAGStore {
     }
 
     private @Nullable DAG getInternal(TreeId id, final ByteBuffer key) {
-        DAG dag = null;
-        try (Txn<ByteBuffer> t = env.txnRead()) {
-            ByteBuffer value = db.get(t, key);
-            if (null != value) {
-                dag = decode(id, value);
+        DAG dag = dirty.get(id);
+        if (dag == null) {
+            try (Txn<ByteBuffer> t = env.txnRead()) {
+                ByteBuffer value = db.get(t, key);
+                if (null != value) {
+                    dag = decode(id, value);
+                }
             }
         }
         return dag;
@@ -70,13 +76,17 @@ class LMDBDAGStore {
 
     public List<DAG> getTrees(final Set<TreeId> ids, List<DAG> target)
             throws NoSuchElementException {
+
         try (Txn<ByteBuffer> t = env.txnRead()) {
             for (TreeId id : ids) {
-                ByteBuffer val = db.get(t, toKey(id));
-                if (val == null) {
-                    throw new NoSuchElementException(id + " not found");
+                DAG dag = dirty.get(id);
+                if (dag == null) {
+                    ByteBuffer val = db.get(t, toKey(id));
+                    if (val == null) {
+                        throw new NoSuchElementException(id + " not found");
+                    }
+                    dag = decode(id, val);
                 }
-                DAG dag = decode(id, val);
                 target.add(dag);
             }
         }
@@ -85,22 +95,31 @@ class LMDBDAGStore {
 
     public void putAll(Map<TreeId, DAG> dags) {
         Map<TreeId, DAG> changed = Maps.filterValues(dags, (d) -> d.isMutated());
+        dirty.putAll(changed);
+        if (dirty.size() >= dirtyThreshold) {
+            flush();
+        }
+    }
+
+    private synchronized void flush() {
+        List<DAG> save = new ArrayList<>(dirty.values());
+        dirty.clear();
 
         try (Txn<ByteBuffer> t = env.txnWrite()) {
-            for (Entry<TreeId, DAG> e : changed.entrySet()) {
-                ByteBuffer key = toKey(e.getKey());
-                ByteBuffer val = encode(e.getValue());
+            for (DAG d : save) {
+                ByteBuffer key = toKey(d.getId());
+                ByteBuffer val = encode(d);
                 db.put(t, key, val);
             }
             t.commit();
         }
+
     }
 
     private void putInternal(ByteBuffer key, DAG dag) {
-        ByteBuffer value = encode(dag);
-        try (Txn<ByteBuffer> t = env.txnWrite()) {
-            db.put(t, key, value);
-            t.commit();
+        dirty.put(dag.getId(), dag);
+        if (dirty.size() >= dirtyThreshold) {
+            flush();
         }
     }
 
