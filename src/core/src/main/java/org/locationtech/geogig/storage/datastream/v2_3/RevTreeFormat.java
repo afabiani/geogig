@@ -22,6 +22,7 @@ import org.locationtech.geogig.model.Bucket;
 import org.locationtech.geogig.model.Node;
 import org.locationtech.geogig.model.ObjectId;
 import org.locationtech.geogig.model.RevObject.TYPE;
+import org.locationtech.geogig.model.internal.ByteBufferDataInput;
 import org.locationtech.geogig.model.RevTree;
 import org.locationtech.geogig.plumbing.HashObject;
 

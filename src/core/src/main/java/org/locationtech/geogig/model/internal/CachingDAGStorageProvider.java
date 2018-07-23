@@ -51,7 +51,7 @@ final class CachingDAGStorageProvider implements DAGStorageProvider {
 
     private HeapDAGStorageProvider heap;
 
-    private RocksdbDAGStorageProvider disk;
+    private DAGStorageProvider disk;
 
     private DAGStorageProvider nodeStore;
 
@@ -71,7 +71,8 @@ final class CachingDAGStorageProvider implements DAGStorageProvider {
 
     private DAGStorageProvider disk() {
         if (disk == null) {
-            disk = new RocksdbDAGStorageProvider(this.source, this.treeCache);
+//            disk = new RocksdbDAGStorageProvider(this.source, this.treeCache);
+            disk = new LMDBDAGStorageProvider(this.source, this.treeCache);
         }
         return disk;
     }

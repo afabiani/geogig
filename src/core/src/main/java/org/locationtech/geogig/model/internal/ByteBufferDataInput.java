@@ -7,7 +7,7 @@
  * Contributors:
  * Gabriel Roldan (Boundless) - initial implementation
  */
-package org.locationtech.geogig.storage.datastream.v2_3;
+package org.locationtech.geogig.model.internal;
 
 import java.io.DataInput;
 import java.io.EOFException;
@@ -21,9 +21,13 @@ import java.nio.ByteOrder;
  * Adapts a {@link ByteBuffer} as a {@link DataInput}
  *
  */
-class ByteBufferDataInput implements DataInput {
+public class ByteBufferDataInput implements DataInput {
 
     private ByteBuffer buff;
+
+    public ByteBufferDataInput(ByteBuffer buff) {
+        this(buff, buff.position(), buff.limit());
+    }
 
     public ByteBufferDataInput(ByteBuffer buff, int offset, int limit) {
         this.buff = buff.duplicate();

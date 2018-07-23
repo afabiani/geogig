@@ -18,13 +18,11 @@ import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Random;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import org.eclipse.jdt.annotation.Nullable;
 import org.junit.After;
@@ -48,6 +46,8 @@ import org.locationtech.geogig.storage.ConfigDatabase;
 import org.locationtech.geogig.storage.ObjectStore;
 import org.locationtech.geogig.storage.fs.IniFileConfigDatabase;
 import org.locationtech.geogig.test.TestPlatform;
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.io.WKTReader;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
@@ -55,8 +55,6 @@ import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.Iterators;
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
-import org.locationtech.jts.geom.Geometry;
-import org.locationtech.jts.io.WKTReader;
 
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public abstract class AbstractObjectStoreStressTest {
@@ -135,7 +133,7 @@ public abstract class AbstractObjectStoreStressTest {
         testPutAll(5000_000);
     }
 
-    @Ignore
+    // @Ignore
     @Test
     public void test06_PutAll_10M() throws Exception {
         testPutAll(10_000_000);
@@ -148,43 +146,24 @@ public abstract class AbstractObjectStoreStressTest {
     }
 
     private void testPutAll(final int count) throws Exception {
+        MemoryUsage initialMem = MEMORY_MX_BEAN.getHeapMemoryUsage();
+
+        final CountingListener listener = BulkOpListener.newCountingListener();
+
+        Iterator<RevObject> objects;
+        objects = sequentialIds(0, count).parallel().map((id) -> fakeObject(id)).iterator();
+
         System.err.printf("### test: %s, dir: %s\n", testName.getMethodName(),
                 tmp.getRoot().getAbsolutePath());
 
-        MemoryUsage initialMem = MEMORY_MX_BEAN.getHeapMemoryUsage();
-
         Stopwatch sw = Stopwatch.createStarted();
-        final int threadCount = 4;
+        db.putAll(objects, listener);
 
-        final CountingListener listener = BulkOpListener.newCountingListener();
-        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-        List<Future<?>> futures = new ArrayList<>();
-        for (int t = 0; t < threadCount; t++) {
-            int jobSize = count / threadCount;
-            final int from = t * jobSize;
-            if (t == threadCount - 1) {
-                jobSize = jobSize + (count % threadCount);
-            }
-            final Iterator<RevObject> objects = asObjects(sequentialIds(from, jobSize).iterator());
-            Future<?> future = executor.submit(new Runnable() {
-                @Override
-                public void run() {
-                    db.putAll(objects, listener);
-                }
-            });
-            futures.add(future);
-        }
-
-        for (Future<?> f : futures) {
-            f.get();
-        }
         sw.stop();
         System.err.printf("--- %,d inserted in %s\n", listener.inserted(), sw);
         // Assert.assertEquals(count, listener.inserted());
 
         final MemoryUsage indexCreateMem = MEMORY_MX_BEAN.getHeapMemoryUsage();
-
-        executor.shutdownNow();
 
         // Assert.assertEquals(count, listener.inserted());
 
@@ -193,8 +172,8 @@ public abstract class AbstractObjectStoreStressTest {
 
         final int queryCount = count / 10;
 
-//        testGettIfPresent(count, queryCount);
-//
+        // testGettIfPresent(count, queryCount);
+        //
         MemoryUsage getIfPresentTraversedMem = MEMORY_MX_BEAN.getHeapMemoryUsage();
 
         Iterable<ObjectId> ids = randomIds(queryCount, count);
@@ -269,27 +248,10 @@ public abstract class AbstractObjectStoreStressTest {
         System.err.println();
     }
 
-    private Iterable<ObjectId> sequentialIds(final int from, final int count) {
+    private Stream<ObjectId> sequentialIds(final int from, final int count) {
         Preconditions.checkArgument(from >= 0 && count > 0);
 
-        return new Iterable<ObjectId>() {
-            @Override
-            public Iterator<ObjectId> iterator() {
-                return new AbstractIterator<ObjectId>() {
-                    int c = from;
-
-                    final int to = from + count;
-
-                    @Override
-                    protected ObjectId computeNext() {
-                        if (c == to) {
-                            return endOfData();
-                        }
-                        return fakeId(c++);
-                    }
-                };
-            }
-        };
+        return IntStream.range(from, from + count).mapToObj((i) -> fakeId(i));
     }
 
     private Iterable<ObjectId> randomIds(final int count, final int total) {
@@ -324,10 +286,6 @@ public abstract class AbstractObjectStoreStressTest {
             }
         };
 
-    }
-
-    public Iterator<RevObject> asObjects(Iterator<ObjectId> ids) {
-        return Iterators.transform(ids, (id) -> fakeObject(id));
     }
 
     private RevObject fakeObject(int i) {
