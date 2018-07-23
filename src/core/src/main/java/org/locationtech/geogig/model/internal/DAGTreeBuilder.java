@@ -262,7 +262,7 @@ public class DAGTreeBuilder {
                 root.forEachBucket((b) -> dagBuckets.add(b));
                 checkNotNull(dagBuckets);
                 mutableBuckets = this.state.clusteringStrategy.getDagTrees(dagBuckets);
-                checkState(dagBuckets.size() == mutableBuckets.size());
+                checkState(dagBuckets.size() == mutableBuckets.size(), "expected %s, got %s", dagBuckets.size(), mutableBuckets.size());
             }
             if (state.isCancelled()) {
                 return null;

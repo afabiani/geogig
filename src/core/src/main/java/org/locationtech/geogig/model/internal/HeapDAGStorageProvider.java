@@ -62,16 +62,15 @@ class HeapDAGStorageProvider implements DAGStorageProvider {
     }
 
     @Override
-    public List<DAG> getTrees(Set<TreeId> ids) throws NoSuchElementException {
-        List<DAG> res = new ArrayList<>(ids.size());
+    public List<DAG> getTrees(Set<TreeId> ids, List<DAG> target) throws NoSuchElementException {
         ids.forEach((id) -> {
             DAG dag = trees.get(id);
             if (dag == null) {
                 throw new NoSuchElementException(id.toString());
             }
-            res.add(dag);
+            target.add(dag);
         });
-        return res;
+        return target;
     }
 
     private DAG createTree(TreeId treeId, ObjectId originalTreeId) {

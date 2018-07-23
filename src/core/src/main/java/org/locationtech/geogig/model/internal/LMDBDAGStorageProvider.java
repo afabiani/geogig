@@ -127,8 +127,9 @@ class LMDBDAGStorageProvider implements DAGStorageProvider {
         return treeCache;
     }
 
-    public @Override List<DAG> getTrees(Set<TreeId> ids) throws NoSuchElementException {
-        return dagStore.getTrees(ids);
+    public @Override List<DAG> getTrees(Set<TreeId> ids, List<DAG> target)
+            throws NoSuchElementException {
+        return dagStore.getTrees(ids, target);
     }
 
     public @Override DAG getOrCreateTree(TreeId treeId, ObjectId originalTreeId) {

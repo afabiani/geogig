@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.eclipse.jdt.annotation.Nullable;
 import org.locationtech.geogig.model.ObjectId;
@@ -118,11 +117,8 @@ class RocksdbDAGStore {
         return dag;
     }
 
-    public List<DAG> getTrees(final Set<TreeId> ids) throws NoSuchElementException {
-        return getInternal2(ids);
-    }
-
-    private List<DAG> getInternal2(final Set<TreeId> ids) throws NoSuchElementException {
+    public List<DAG> getTrees(final Set<TreeId> ids, List<DAG> target)
+            throws NoSuchElementException {
         Map<byte[], byte[]> multiGet;
         try {
             multiGet = db.multiGet(readOptions, Collections.nCopies(ids.size(), column),
@@ -133,8 +129,9 @@ class RocksdbDAGStore {
         }
         Preconditions.checkState(multiGet.size() == ids.size());
 
-        return multiGet.entrySet().stream().map(e -> decode(e.getKey(), e.getValue()))
-                .collect(Collectors.toList());
+        multiGet.forEach((k, v) -> target.add(decode(k, v)));
+
+        return target;
     }
 
     public void putAll(Map<TreeId, DAG> dags) {

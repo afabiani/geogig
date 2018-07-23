@@ -41,7 +41,6 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ListMultimap;
-import org.locationtech.jts.geom.Envelope;
 
 /**
  * Base class for strategy objects that define the internal structure of a {@link RevTree}.
@@ -519,7 +518,7 @@ public abstract class ClusteringStrategy extends NodeOrdering {
          * Returns all the DAG's for the argument ids, which must already exist
          */
         public List<DAG> getAll(Set<TreeId> ids) {
-            List<DAG> all = new ArrayList<>();
+            List<DAG> all = new ArrayList<>(ids.size());
             Set<TreeId> missing = new HashSet<>();
             for (TreeId id : ids) {
                 DAG dag;
@@ -534,8 +533,10 @@ public abstract class ClusteringStrategy extends NodeOrdering {
                     all.add(dag);
                 }
             }
-            List<DAG> uncached = store.getTrees(missing);
-            all.addAll(uncached);
+            if (!missing.isEmpty()) {
+                all = store.getTrees(missing, all);
+            }
+            Preconditions.checkState(ids.size() == all.size());
             return all;
         }
 

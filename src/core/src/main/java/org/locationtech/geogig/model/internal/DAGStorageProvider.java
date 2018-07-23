@@ -23,7 +23,7 @@ interface DAGStorageProvider {
 
     public TreeCache getTreeCache();
 
-    public List<DAG> getTrees(Set<TreeId> ids) throws NoSuchElementException;
+    public List<DAG> getTrees(Set<TreeId> ids, List<DAG> target) throws NoSuchElementException;
 
     public DAG getOrCreateTree(TreeId treeId, ObjectId originalTreeId);
 

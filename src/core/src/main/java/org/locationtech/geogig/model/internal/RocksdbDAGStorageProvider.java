@@ -77,8 +77,8 @@ class RocksdbDAGStorageProvider implements DAGStorageProvider {
     }
 
     @Override
-    public List<DAG> getTrees(Set<TreeId> ids) throws NoSuchElementException{
-        return dagStore.getTrees(ids);
+    public List<DAG> getTrees(Set<TreeId> ids, List<DAG> target) throws NoSuchElementException{
+        return dagStore.getTrees(ids, target);
     }
 
     @Override

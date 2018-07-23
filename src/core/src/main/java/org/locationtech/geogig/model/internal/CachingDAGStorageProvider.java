@@ -71,7 +71,7 @@ final class CachingDAGStorageProvider implements DAGStorageProvider {
 
     private DAGStorageProvider disk() {
         if (disk == null) {
-//            disk = new RocksdbDAGStorageProvider(this.source, this.treeCache);
+            // disk = new RocksdbDAGStorageProvider(this.source, this.treeCache);
             disk = new LMDBDAGStorageProvider(this.source, this.treeCache);
         }
         return disk;
@@ -99,20 +99,20 @@ final class CachingDAGStorageProvider implements DAGStorageProvider {
     }
 
     @Override
-    public List<DAG> getTrees(Set<TreeId> ids) throws NoSuchElementException {
-        List<DAG> cached = heap.getTrees(Sets.filter(ids, heapTrees));
-        List<DAG> res = cached;
-        if (cached.size() < ids.size()) {
-            if (disk != null) {
-                List<DAG> stored = disk.getTrees(Sets.filter(ids, diskTrees));
-                res.addAll(stored);
+    public List<DAG> getTrees(Set<TreeId> ids, List<DAG> target) throws NoSuchElementException {
+        Set<TreeId> heapIds = Sets.filter(ids, heapTrees);
+        target = heap.getTrees(heapIds, target);
+        if (disk != null) {
+            Set<TreeId> diskIds = Sets.filter(ids, diskTrees);
+            if (!diskIds.isEmpty()) {
+                target = disk.getTrees(diskIds, target);
             }
         }
-        if (res.size() < ids.size()) {
-            Set<TreeId> resids = Sets.newHashSet(Iterables.transform(res, (d) -> d.getId()));
+        if (target.size() < ids.size()) {
+            Set<TreeId> resids = Sets.newHashSet(Iterables.transform(target, (d) -> d.getId()));
             throw new NoSuchElementException(Sets.difference(ids, resids).toString());
         }
-        return res;
+        return target;
     }
 
     @Override

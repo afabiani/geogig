@@ -12,7 +12,6 @@ package org.locationtech.geogig.model.internal;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -69,19 +68,19 @@ class LMDBDAGStore {
         return dag;
     }
 
-    public List<DAG> getTrees(final Set<TreeId> ids) throws NoSuchElementException {
-
-        List<DAG> dags = new ArrayList<>(ids.size());
-
+    public List<DAG> getTrees(final Set<TreeId> ids, List<DAG> target)
+            throws NoSuchElementException {
         try (Txn<ByteBuffer> t = env.txnRead()) {
             for (TreeId id : ids) {
                 ByteBuffer val = db.get(t, toKey(id));
-                Preconditions.checkState(val != null);
+                if (val == null) {
+                    throw new NoSuchElementException(id + " not found");
+                }
                 DAG dag = decode(id, val);
-                dags.add(dag);
+                target.add(dag);
             }
         }
-        return dags;
+        return target;
     }
 
     public void putAll(Map<TreeId, DAG> dags) {
