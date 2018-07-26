@@ -12,8 +12,7 @@ package org.locationtech.geogig.model.internal;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentMap;
 
 import org.locationtech.geogig.model.ObjectId;
 import org.locationtech.geogig.model.RevTree;
@@ -24,28 +23,19 @@ import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
 
 class TreeCache {
-
-    private final AtomicInteger idSequence = new AtomicInteger();
-
-    private final BiMap<Integer, ObjectId> oidMapping = HashBiMap.create(100_000);
-
-    private final LoadingCache<Integer, RevTree> cache;
+    private final LoadingCache<ObjectId, RevTree> cache;
 
     private final ObjectStore store;
 
     public TreeCache(final ObjectStore store) {
         this.store = store;
 
-        final CacheLoader<Integer, RevTree> loader = new CacheLoader<Integer, RevTree>() {
-            @Override
-            public RevTree load(Integer key) throws Exception {
-                ObjectId treeId = oidMapping.get(key);
-                Preconditions.checkState(treeId != null, "No tree id mapped to " + key);
-                RevTree tree = TreeCache.this.store.getTree(treeId);
+        final CacheLoader<ObjectId, RevTree> loader = new CacheLoader<ObjectId, RevTree>() {
+
+            public @Override RevTree load(ObjectId key) throws Exception {
+                RevTree tree = TreeCache.this.store.getTree(key);
                 return tree;
             }
         };
@@ -54,48 +44,25 @@ class TreeCache {
     }
 
     public RevTree getTree(final ObjectId treeId) {
-        Integer internalId = oidMapping.inverse().get(treeId);
-        final RevTree tree;
-        if (internalId == null) {
-            tree = store.getTree(treeId);
-            getTreeId(tree);
-            if (tree.bucketsSize() > 0) {
-                List<ObjectId> bucketIds = new ArrayList<>(tree.bucketsSize());
-                tree.forEachBucket((i, b) -> bucketIds.add(b.getObjectId()));
-                preload(bucketIds);
-            }
-        } else {
-            tree = resolve(internalId.intValue());
+        final RevTree tree = resolve(treeId);
+        if (tree.bucketsSize() > 0) {
+            List<ObjectId> bucketIds = new ArrayList<>(tree.bucketsSize());
+            tree.forEachBucket((i, b) -> bucketIds.add(b.getObjectId()));
+            preload(bucketIds);
         }
         return tree;
     }
 
-    public RevTree resolve(final int leafRevTreeId) {
-        RevTree tree;
-        try {
-            tree = cache.get(Integer.valueOf(leafRevTreeId));
-        } catch (ExecutionException e) {
-            throw new RuntimeException(e);
-        }
+    public RevTree resolve(final ObjectId leafRevTreeId) {
+        RevTree tree = cache.getUnchecked(leafRevTreeId);
         Preconditions.checkNotNull(tree);
         return tree;
-    }
-
-    public Integer getTreeId(RevTree tree) {
-        Integer cacheId = oidMapping.inverse().get(tree.getId());
-        if (cacheId == null) {
-            cacheId = Integer.valueOf(idSequence.incrementAndGet());
-            oidMapping.put(cacheId, tree.getId());
-            cache.put(cacheId, tree);
-        }
-        return cacheId;
     }
 
     public void preload(Iterable<ObjectId> trees) {
         Iterator<RevTree> preloaded = store.getAll(trees, BulkOpListener.NOOP_LISTENER,
                 RevTree.class);
-        while (preloaded.hasNext()) {
-            getTreeId(preloaded.next());
-        }
+        ConcurrentMap<ObjectId, RevTree> map = cache.asMap();
+        preloaded.forEachRemaining(t -> map.putIfAbsent(t.getId(), t));
     }
 }

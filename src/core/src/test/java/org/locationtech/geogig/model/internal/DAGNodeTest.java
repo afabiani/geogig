@@ -24,6 +24,7 @@ import java.io.IOException;
 import org.junit.Before;
 import org.junit.Test;
 import org.locationtech.geogig.model.Node;
+import org.locationtech.geogig.model.ObjectId;
 import org.locationtech.geogig.model.RevTree;
 import org.locationtech.geogig.model.impl.RevObjectTestSupport;
 import org.locationtech.geogig.model.internal.DAGNode.FeatureDAGNode;
@@ -41,6 +42,9 @@ public class DAGNodeTest {
 
     private RevTree treesTree;
 
+    private ObjectId tid1 = RevObjectTestSupport.hashString("1"),
+            tid2 = RevObjectTestSupport.hashString("2");
+
     @Before
     public void before() {
         ObjectStore store = new HeapObjectStore();
@@ -53,27 +57,27 @@ public class DAGNodeTest {
 
     @Test
     public void lazyFeatureNodeCreate() {
-        DAGNode node = DAGNode.featureNode(5, 511);
+        DAGNode node = DAGNode.featureNode(tid1, 511);
         assertTrue(node instanceof FeatureDAGNode);
         FeatureDAGNode fnode = (FeatureDAGNode) node;
-        assertEquals(5, fnode.leafRevTreeId);
+        assertEquals(tid1, fnode.leafRevTreeId);
         assertEquals(511, fnode.nodeIndex);
         assertFalse("a lazy feature node can never be nil", node.isNull());
     }
 
     @Test
     public void lazyFeatureNodeEquals() {
-        DAGNode node = DAGNode.featureNode(5, 511);
-        assertEquals(node, DAGNode.featureNode(5, 511));
-        assertNotEquals(node, DAGNode.featureNode(5, 510));
-        assertNotEquals(node, DAGNode.featureNode(4, 511));
+        DAGNode node = DAGNode.featureNode(tid1, 511);
+        assertEquals(node, DAGNode.featureNode(tid1, 511));
+        assertNotEquals(node, DAGNode.featureNode(tid1, 510));
+        assertNotEquals(node, DAGNode.featureNode(tid2, 511));
     }
 
     @Test
     public void lazyFeatureNodeResolve() {
-        DAGNode node = DAGNode.featureNode(5, 511);
+        DAGNode node = DAGNode.featureNode(tid1, 511);
 
-        when(cache.resolve(eq(5))).thenReturn(featuresTree);
+        when(cache.resolve(eq(tid1))).thenReturn(featuresTree);
         Node resolved = node.resolve(cache);
         assertNotNull(resolved);
         assertSame(featuresTree.features().get(511), resolved);
@@ -81,7 +85,7 @@ public class DAGNodeTest {
 
     @Test
     public void lazyFeatureNodeEncodeDecode() throws IOException {
-        DAGNode node = DAGNode.featureNode(5, 511);
+        DAGNode node = DAGNode.featureNode(tid1, 511);
         ByteArrayDataOutput out = ByteStreams.newDataOutput();
         DAGNode.encode(node, out);
 

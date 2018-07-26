@@ -14,6 +14,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 
 import org.locationtech.geogig.model.Node;
+import org.locationtech.geogig.model.ObjectId;
 import org.locationtech.geogig.model.RevTree;
 import org.locationtech.geogig.storage.datastream.FormatCommonV2_2;
 import org.locationtech.geogig.storage.datastream.Varint;
@@ -46,9 +47,9 @@ abstract class DAGNode {
             } else {
                 output.writeByte(MAGIC_LAZY_FEATURE);
             }
-            final int leafRevTreeId = ln.leafRevTreeId;
+            final ObjectId leafRevTreeId = ln.leafRevTreeId;
             final int nodeIndex = ln.nodeIndex;
-            Varint.writeUnsignedVarInt(leafRevTreeId, output);
+            leafRevTreeId.writeTo(output);
             Varint.writeUnsignedVarInt(nodeIndex, output);
         }
 
@@ -62,13 +63,13 @@ abstract class DAGNode {
             return DAGNode.of(node);
         }
         case MAGIC_LAZY_TREE: {
-            int treeCacheId = Varint.readUnsignedVarInt(in);
+            ObjectId treeCacheId = ObjectId.readFrom(in);
             int nodeIndex = Varint.readUnsignedVarInt(in);
             DAGNode node = DAGNode.treeNode(treeCacheId, nodeIndex);
             return node;
         }
         case MAGIC_LAZY_FEATURE: {
-            int treeCacheId = Varint.readUnsignedVarInt(in);
+            ObjectId treeCacheId = ObjectId.readFrom(in);
             int nodeIndex = Varint.readUnsignedVarInt(in);
             DAGNode node = DAGNode.featureNode(treeCacheId, nodeIndex);
             return node;
@@ -109,11 +110,11 @@ abstract class DAGNode {
 
     abstract static class LazyDAGNode extends DAGNode {
 
-        protected final int leafRevTreeId;
+        protected final ObjectId leafRevTreeId;
 
         protected final int nodeIndex;
 
-        public LazyDAGNode(final int leafRevTreeId, final int nodeIndex) {
+        public LazyDAGNode(final ObjectId leafRevTreeId, final int nodeIndex) {
             this.leafRevTreeId = leafRevTreeId;
             this.nodeIndex = nodeIndex;
         }
@@ -137,7 +138,7 @@ abstract class DAGNode {
                 return false;
             }
             LazyDAGNode l = (LazyDAGNode) o;
-            return leafRevTreeId == l.leafRevTreeId && nodeIndex == l.nodeIndex;
+            return leafRevTreeId.equals(l.leafRevTreeId) && nodeIndex == l.nodeIndex;
         }
 
         @Override
@@ -149,7 +150,7 @@ abstract class DAGNode {
 
     static final class TreeDAGNode extends LazyDAGNode {
 
-        TreeDAGNode(int leafRevTreeId, int nodeIndex) {
+        TreeDAGNode(ObjectId leafRevTreeId, int nodeIndex) {
             super(leafRevTreeId, nodeIndex);
         }
 
@@ -162,7 +163,7 @@ abstract class DAGNode {
 
     static final class FeatureDAGNode extends LazyDAGNode {
 
-        FeatureDAGNode(int leafRevTreeId, int nodeIndex) {
+        FeatureDAGNode(ObjectId leafRevTreeId, int nodeIndex) {
             super(leafRevTreeId, nodeIndex);
         }
 
@@ -172,11 +173,11 @@ abstract class DAGNode {
         }
     }
 
-    public static DAGNode treeNode(final int cacheTreeId, final int nodeIndex) {
+    public static DAGNode treeNode(final ObjectId cacheTreeId, final int nodeIndex) {
         return new TreeDAGNode(cacheTreeId, nodeIndex);
     }
 
-    public static DAGNode featureNode(final int cacheTreeId, final int nodeIndex) {
+    public static DAGNode featureNode(final ObjectId cacheTreeId, final int nodeIndex) {
         return new FeatureDAGNode(cacheTreeId, nodeIndex);
     }
 }

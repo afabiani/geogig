@@ -475,22 +475,19 @@ public abstract class ClusteringStrategy extends NodeOrdering {
             return ImmutableMap.of();
         }
 
-        final TreeCache treeCache = storageProvider.getTreeCache();
-        final int cacheTreeId = treeCache.getTreeId(tree).intValue();
-
         Map<NodeId, DAGNode> dagNodes = new HashMap<>();
 
         final int treesSize = tree.treesSize();
         for (int i = 0; i < treesSize; i++) {
             NodeId nodeId = computeId(tree.getTree(i));
-            DAGNode dagNode = DAGNode.treeNode(cacheTreeId, i);
+            DAGNode dagNode = DAGNode.treeNode(tree.getId(), i);
             dagNodes.put(nodeId, dagNode);
         }
 
         final int featuresSize = tree.featuresSize();
         for (int i = 0; i < featuresSize; i++) {
             NodeId nodeId = computeId(tree.getFeature(i));
-            DAGNode dagNode = DAGNode.featureNode(cacheTreeId, i);
+            DAGNode dagNode = DAGNode.featureNode(tree.getId(), i);
             dagNodes.put(nodeId, dagNode);
         }
 
