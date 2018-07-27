@@ -83,20 +83,29 @@ public final class Varint {
         return cnt;
     }
 
+    public static int writeSignedVarInt(int value, DataOutput out) throws IOException {
+        return writeUnsignedVarInt(new byte[5], (value << 1) ^ (value >> 31), out);
+    }
+
     /**
      * @see #writeSignedVarLong(long, DataOutput)
      */
-    public static int writeSignedVarInt(int value, DataOutput out) throws IOException {
+    public static int writeSignedVarInt(byte[] buff, int value, DataOutput out) throws IOException {
         // Great trick from http://code.google.com/apis/protocolbuffers/docs/encoding.html#types
-        return writeUnsignedVarInt((value << 1) ^ (value >> 31), out);
+        return writeUnsignedVarInt(buff, (value << 1) ^ (value >> 31), out);
+    }
+
+    public static int writeUnsignedVarInt(int value, DataOutput out) throws IOException {
+        return writeUnsignedVarInt(new byte[5], value, out);
     }
 
     /**
      * @return how many bytes have been written
      * @see #writeUnsignedVarLong(long, DataOutput)
      */
-    public static int writeUnsignedVarInt(int value, DataOutput out) throws IOException {
-        byte[] buff = new byte[5];
+    public static int writeUnsignedVarInt(byte[] buff, int value, DataOutput out)
+            throws IOException {
+        Preconditions.checkArgument(buff.length > 4);
         int cnt = 0;
         while ((value & 0xFFFFFF80) != 0L) {
             // out.writeByte((value & 0x7F) | 0x80);
@@ -106,19 +115,6 @@ public final class Varint {
         // out.writeByte(value & 0x7F);
         buff[cnt++] = (byte) (value & 0x7F);
         out.write(buff, 0, cnt);
-        return cnt;
-    }
-
-    public static int writeUnsignedVarInt(int value, byte[] buff) {
-        Preconditions.checkState(buff.length > 4);
-        int cnt = 0;
-        while ((value & 0xFFFFFF80) != 0L) {
-            // out.writeByte((value & 0x7F) | 0x80);
-            buff[cnt++] = (byte) ((value & 0x7F) | 0x80);
-            value >>>= 7;
-        }
-        // out.writeByte(value & 0x7F);
-        buff[cnt++] = (byte) (value & 0x7F);
         return cnt;
     }
 

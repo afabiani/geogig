@@ -96,6 +96,10 @@ class Float32Bounds {
             return new Envelope();
         return new Envelope(xmin, xmax, ymin, ymax);
     }
+    
+    public void init(Envelope env) {
+        env.init(xmin, xmax, ymin, ymax);
+    }
 
     public boolean intersects(Envelope env) {
         if (isNull() || env.isNull()) {
@@ -116,9 +120,7 @@ class Float32Bounds {
             return;
         env.expandToInclude(xmin, ymin);
         env.expandToInclude(xmax, ymax);
-        Float32Bounds newEnv = Float32Bounds.valueOf(env);
-        Envelope float32Version = newEnv.asEnvelope();
-        env.init(float32Version);
+        Float32Bounds.valueOf(env).init(env);
     }
 
     public boolean isNull() {
