@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.eclipse.jdt.annotation.Nullable;
 import org.lmdbjava.Dbi;
@@ -28,7 +29,6 @@ import org.locationtech.geogig.model.RevTree;
 import org.locationtech.geogig.storage.ObjectStore;
 
 import com.google.common.base.Throwables;
-import com.google.common.collect.Maps;
 
 class LMDBDAGStorageProvider implements DAGStorageProvider {
 
@@ -50,17 +50,19 @@ class LMDBDAGStorageProvider implements DAGStorageProvider {
 
     private DirectByteBufferPool valuebuffers = new DirectByteBufferPool(4096);
 
-    LMDBDAGStorageProvider(ObjectStore source) {
+    private ByteArrayOutputStreamPool streams = new ByteArrayOutputStreamPool(4096);
+
+    public LMDBDAGStorageProvider(ObjectStore source) {
         this(source, new TreeCache(source));
     }
 
-    LMDBDAGStorageProvider(ObjectStore source, TreeCache treeCache) {
+    public LMDBDAGStorageProvider(ObjectStore source, TreeCache treeCache) {
         this.objectStore = source;
         this.treeCache = treeCache;
         try {
             dagDbDir = Files.createTempDirectory("geogig-dag-store").toFile();
             dbEnv = Env.create()//
-                    .setMapSize(1 * 1024L * 1024 * 1024 * 1024)//
+                    .setMapSize(100L * 1024 * 1024 * 1024)//
                     .setMaxDbs(2)//
                     .setMaxReaders(128)//
                     .open(dagDbDir, //
@@ -73,7 +75,7 @@ class LMDBDAGStorageProvider implements DAGStorageProvider {
             nodeDb = dbEnv.openDbi("node-store", DbiFlags.MDB_CREATE);
 
             this.dagStore = new LMDBDAGStore(dbEnv, dagDb, keybuffers, valuebuffers);
-            this.nodeStore = new LMDBNodeStore(dbEnv, nodeDb, keybuffers, valuebuffers);
+            this.nodeStore = new LMDBNodeStore(dbEnv, nodeDb, keybuffers, valuebuffers, streams);
         } catch (Exception e) {
             dispose();
             Throwables.throwIfUnchecked(e);
@@ -82,6 +84,9 @@ class LMDBDAGStorageProvider implements DAGStorageProvider {
     }
 
     public @Override void dispose() {
+        keybuffers.dispose();
+        valuebuffers.dispose();
+        streams.dispose();
         try {
             if (null != dagStore) {
                 dagStore.close();
@@ -100,8 +105,6 @@ class LMDBDAGStorageProvider implements DAGStorageProvider {
                         dbEnv = null;
                     }
                 } finally {
-                    keybuffers.dispose();
-                    valuebuffers.dispose();
                     delete(dagDbDir);
                 }
             }
@@ -140,9 +143,9 @@ class LMDBDAGStorageProvider implements DAGStorageProvider {
         dagStore.putAll(dags);
     }
 
-    public @Override Map<NodeId, Node> getNodes(final Set<NodeId> nodeIds) {
-        Map<NodeId, DAGNode> dagNodes = nodeStore.getAll(nodeIds);
-        return Maps.transformValues(dagNodes, (dn) -> dn.resolve(treeCache));
+    public @Override List<Node> getNodes(final Set<NodeId> nodeIds) {
+        List<DAGNode> dagNodes = nodeStore.getAll(nodeIds);
+        return dagNodes.stream().map(dn -> dn.resolve(treeCache)).collect(Collectors.toList());
     }
 
     public @Override void saveNode(NodeId nodeId, Node node) {

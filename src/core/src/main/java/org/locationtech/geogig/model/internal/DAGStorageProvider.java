@@ -20,7 +20,6 @@ import org.locationtech.geogig.model.ObjectId;
 import org.locationtech.geogig.model.RevTree;
 
 interface DAGStorageProvider {
-
     public TreeCache getTreeCache();
 
     public List<DAG> getTrees(Set<TreeId> ids, List<DAG> target) throws NoSuchElementException;
@@ -29,7 +28,7 @@ interface DAGStorageProvider {
 
     public void save(Map<TreeId, DAG> dags);
 
-    public Map<NodeId, Node> getNodes(Set<NodeId> nodeIds);
+    public List<Node> getNodes(Set<NodeId> nodeIds);
 
     public void saveNode(NodeId nodeId, Node node);
 

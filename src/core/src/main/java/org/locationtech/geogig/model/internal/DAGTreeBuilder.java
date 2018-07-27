@@ -13,13 +13,13 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import java.lang.Thread.UncaughtExceptionHandler;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
@@ -32,6 +32,7 @@ import java.util.function.BooleanSupplier;
 
 import org.eclipse.jdt.annotation.Nullable;
 import org.locationtech.geogig.model.Bucket;
+import org.locationtech.geogig.model.CanonicalNodeOrder;
 import org.locationtech.geogig.model.Node;
 import org.locationtech.geogig.model.ObjectId;
 import org.locationtech.geogig.model.RevObject.TYPE;
@@ -262,7 +263,8 @@ public class DAGTreeBuilder {
                 root.forEachBucket((b) -> dagBuckets.add(b));
                 checkNotNull(dagBuckets);
                 mutableBuckets = this.state.clusteringStrategy.getDagTrees(dagBuckets);
-                checkState(dagBuckets.size() == mutableBuckets.size(), "expected %s, got %s", dagBuckets.size(), mutableBuckets.size());
+                checkState(dagBuckets.size() == mutableBuckets.size(), "expected %s, got %s",
+                        dagBuckets.size(), mutableBuckets.size());
             }
             if (state.isCancelled()) {
                 return null;
@@ -328,7 +330,7 @@ public class DAGTreeBuilder {
             }
             checkState(root.numBuckets() == 0);
 
-            final ImmutableList<Node> children;
+            final List<Node> children;
             {
                 Set<NodeId> childrenIds = new HashSet<>();
                 root.forEachChild((id) -> childrenIds.add(id));
@@ -357,14 +359,14 @@ public class DAGTreeBuilder {
 
         }
 
-        private ImmutableList<Node> toNodes(Set<NodeId> nodeIds) {
+        private List<Node> toNodes(Set<NodeId> nodeIds) {
             if (null == nodeIds) {
                 return ImmutableList.of();
             }
 
-            SortedMap<NodeId, Node> nodes = state.clusteringStrategy.getNodes(nodeIds);
-            ImmutableList<Node> list = ImmutableList.copyOf(nodes.values());
-            return list;
+            List<Node> nodes = state.clusteringStrategy.getNodes(nodeIds);
+            Collections.sort(nodes, CanonicalNodeOrder.INSTANCE);
+            return nodes;
         }
 
         private long sumTreeSizes(Iterable<Node> trees) {

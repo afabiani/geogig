@@ -35,6 +35,11 @@ import org.locationtech.geogig.model.impl.QuadTreeBuilder;
 import org.locationtech.geogig.model.impl.RevObjectTestSupport;
 import org.locationtech.geogig.storage.ObjectStore;
 import org.locationtech.geogig.storage.memory.HeapObjectStore;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.Envelope;
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Polygon;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
@@ -42,11 +47,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Sets.SetView;
-import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.Envelope;
-import org.locationtech.jts.geom.Geometry;
-import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.Polygon;
 
 public class QuadTreeTestSupport extends ExternalResource {
 
@@ -122,8 +122,9 @@ public class QuadTreeTestSupport extends ExternalResource {
         target.dagCache.add(clone);
 
         Set<NodeId> children = new HashSet<>(dag.childrenList());
-        Map<NodeId, Node> nodes = source.storageProvider.getNodes(children);
-        Map<NodeId, DAGNode> dagnodes = Maps.transformValues(nodes, (n) -> DAGNode.of(n));
+        List<Node> nodes = source.storageProvider.getNodes(children);
+        Map<NodeId, Node> byId = Maps.uniqueIndex(nodes, node -> source.computeId(node));
+        Map<NodeId, DAGNode> dagnodes = Maps.transformValues(byId, (n) -> DAGNode.of(n));
         target.storageProvider.saveNodes(dagnodes);
 
         Set<TreeId> buckets = new HashSet<>(dag.bucketList());

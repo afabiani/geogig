@@ -32,6 +32,7 @@ import org.locationtech.geogig.model.RevTree;
 import org.locationtech.geogig.model.impl.CanonicalTreeBuilder;
 import org.locationtech.geogig.model.impl.RevObjectTestSupport;
 import org.locationtech.geogig.model.impl.RevTreeBuilder;
+import org.locationtech.geogig.model.internal.ClusteringStrategyBuilder;
 import org.locationtech.geogig.storage.ObjectStore;
 import org.locationtech.geogig.storage.memory.HeapObjectStore;
 import org.locationtech.jts.geom.Envelope;
@@ -106,7 +107,7 @@ public class RevTreeBuilderPerformanceTest {
     }
 
     private Stream<Node> nodes(final int numNodes, ObjectId fakeId) {
-        return IntStream.range(0, numNodes).mapToObj(i -> createNode(i, fakeId));
+        return IntStream.range(0, numNodes).parallel().mapToObj(i -> createNode(i, fakeId));
     }
 
     @Test
@@ -130,7 +131,7 @@ public class RevTreeBuilderPerformanceTest {
         testBuildUnordered(10_000_000);
     }
 
-//    @Ignore
+    // @Ignore
     @Test
     public void testBuilUnordered_05_50M() {
         testBuildUnordered(50_000_000);
@@ -143,7 +144,11 @@ public class RevTreeBuilderPerformanceTest {
     }
 
     private void testBuildUnordered(final int size) {
-        System.err.printf("\n%s\n----------------------\n", testName.getMethodName());
+        System.err.printf("\n----------------------\n%s\nObjectStore: %s\t DAG Store: %s\n",
+                testName.getMethodName(), //
+                odb.getClass().getSimpleName(), //
+                ClusteringStrategyBuilder.getDAGStoreName());
+
         Stopwatch totalTime = Stopwatch.createStarted();
         Stream<Node> nodes = nodes(size, FAKE_ID);
 
@@ -201,6 +206,7 @@ public class RevTreeBuilderPerformanceTest {
                 tree.getId(), //
                 updatedTree.getId()//
         );
+        System.err.println("----------------------");
     }
 
     private Node createNode(int i, ObjectId fakeId) {

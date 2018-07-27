@@ -4,7 +4,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class DirectByteBufferPool {
+class DirectByteBufferPool {
 
     public static class Buffer {
 

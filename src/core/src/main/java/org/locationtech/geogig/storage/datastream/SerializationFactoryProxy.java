@@ -17,6 +17,7 @@ import java.io.OutputStream;
 import org.eclipse.jdt.annotation.Nullable;
 import org.locationtech.geogig.model.ObjectId;
 import org.locationtech.geogig.model.RevObject;
+import org.locationtech.geogig.storage.datastream.v2_3.DataStreamSerializationFactoryV2_3;
 import org.locationtech.geogig.storage.impl.ObjectSerializingFactory;
 
 /**
@@ -45,7 +46,7 @@ public class SerializationFactoryProxy implements ObjectSerializingFactory {
             new LZFSerializationFactory(DataStreamSerializationFactoryV1.INSTANCE), //
             new LZFSerializationFactory(DataStreamSerializationFactoryV2.INSTANCE), //
             new LZFSerializationFactory(DataStreamSerializationFactoryV2_1.INSTANCE), //
-            new LZFSerializationFactory(DataStreamSerializationFactoryV2_2.INSTANCE)//
+            new LZFSerializationFactory(DataStreamSerializationFactoryV2_2.INSTANCE)
     };
 
     private static final int MAX_FORMAT_CODE = SUPPORTED_FORMATS.length - 1;

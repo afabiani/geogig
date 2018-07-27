@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
@@ -135,10 +136,10 @@ public abstract class ClusteringStrategy extends NodeOrdering {
         return trees;
     }
 
-    @VisibleForTesting
+    @VisibleForTesting // ONLY visible for testing
     Node getNode(NodeId nodeId) {
-        SortedMap<NodeId, Node> nodes = getNodes(ImmutableSet.of(nodeId));
-        return nodes.get(nodeId);
+        List<Node> nodes = getNodes(ImmutableSet.of(nodeId));
+        return nodes.get(0);
     }
 
     /**
@@ -151,12 +152,12 @@ public abstract class ClusteringStrategy extends NodeOrdering {
      * For an index tree, the order is first mandated by the natural order of the index attribute
      * values, followed by canonical order.
      */
-    public SortedMap<NodeId, Node> getNodes(Set<NodeId> nodeIds) {
-        Map<NodeId, Node> nodes = storageProvider.getNodes(nodeIds);
-        Comparator<NodeId> nodeOrdering = getNodeOrdering();
-        TreeMap<NodeId, Node> sorted = new TreeMap<>(nodeOrdering);
-        sorted.putAll(nodes);
-        return sorted;
+    public List<Node> getNodes(Set<NodeId> nodeIds) {
+        return storageProvider.getNodes(nodeIds);
+        // Comparator<NodeId> nodeOrdering = getNodeOrdering();
+        // TreeMap<NodeId, Node> sorted = new TreeMap<>(nodeOrdering);
+        // sorted.putAll(nodes);
+        // return sorted;
     }
 
     protected abstract Comparator<NodeId> getNodeOrdering();
@@ -228,6 +229,9 @@ public abstract class ClusteringStrategy extends NodeOrdering {
         // feature in a spatial index)
 
         boolean remove = node.getObjectId().isNull();
+//        CompletableFuture<Void> saveNode = remove? 
+//                CompletableFuture.completedFuture(null):
+//                    CompletableFuture.runAsync(()->storageProvider.saveNode(nodeId, node));
         int delta;
         writeLock.lock();
         try {
@@ -239,6 +243,7 @@ public abstract class ClusteringStrategy extends NodeOrdering {
         if (!remove) {
             storageProvider.saveNode(nodeId, node);
         }
+//        saveNode.join();
         return delta;
     }
 
@@ -479,14 +484,16 @@ public abstract class ClusteringStrategy extends NodeOrdering {
 
         final int treesSize = tree.treesSize();
         for (int i = 0; i < treesSize; i++) {
-            NodeId nodeId = computeId(tree.getTree(i));
+            Node node = tree.getTree(i);
+            NodeId nodeId = computeId(node);
             DAGNode dagNode = DAGNode.treeNode(tree.getId(), i);
             dagNodes.put(nodeId, dagNode);
         }
 
         final int featuresSize = tree.featuresSize();
         for (int i = 0; i < featuresSize; i++) {
-            NodeId nodeId = computeId(tree.getFeature(i));
+            Node node = tree.getFeature(i);
+            NodeId nodeId = computeId(node);
             DAGNode dagNode = DAGNode.featureNode(tree.getId(), i);
             dagNodes.put(nodeId, dagNode);
         }
@@ -562,6 +569,8 @@ public abstract class ClusteringStrategy extends NodeOrdering {
             }
         }
 
+        private final CompletableFuture<Void> completed = CompletableFuture.completedFuture(null);
+        
         public void prune() {
             final int dirtySize = dirty.size();
             if (dirtySize < 10_000) {

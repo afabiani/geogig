@@ -9,6 +9,7 @@
  */
 package org.locationtech.geogig.model.internal;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -59,7 +60,7 @@ final class CachingDAGStorageProvider implements DAGStorageProvider {
 
     private final Predicate<TreeId> heapTrees, diskTrees;
 
-    CachingDAGStorageProvider(ObjectStore source) {
+    public CachingDAGStorageProvider(ObjectStore source) {
         this.source = source;
         this.treeCache = new TreeCache(source);
         heap = new HeapDAGStorageProvider(this.source, this.treeCache);
@@ -69,10 +70,21 @@ final class CachingDAGStorageProvider implements DAGStorageProvider {
         diskTrees = (id) -> id.depthLength() > HEAP_DEPTH_THRESHOLD;
     }
 
+    static final Class<? extends DAGStorageProvider> DELEGATECLASS = RocksdbDAGStorageProvider.class;
+
     private DAGStorageProvider disk() {
         if (disk == null) {
             // disk = new RocksdbDAGStorageProvider(this.source, this.treeCache);
-            disk = new LMDBDAGStorageProvider(this.source, this.treeCache);
+            // disk = new LMDBDAGStorageProvider(this.source, this.treeCache);
+
+            try {
+                disk = DELEGATECLASS.getConstructor(ObjectStore.class, TreeCache.class)
+                        .newInstance(this.source, this.treeCache);
+            } catch (InstantiationException | IllegalAccessException | IllegalArgumentException
+                    | InvocationTargetException | NoSuchMethodException | SecurityException e) {
+                throw new RuntimeException(e);
+            }
+
         }
         return disk;
     }
@@ -125,7 +137,7 @@ final class CachingDAGStorageProvider implements DAGStorageProvider {
     }
 
     @Override
-    public Map<NodeId, Node> getNodes(Set<NodeId> nodeIds) {
+    public List<Node> getNodes(Set<NodeId> nodeIds) {
         return nodeStore.getNodes(nodeIds);
     }
 

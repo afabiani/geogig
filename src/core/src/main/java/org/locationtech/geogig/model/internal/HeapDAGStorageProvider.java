@@ -10,7 +10,6 @@
 package org.locationtech.geogig.model.internal;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -36,11 +35,11 @@ class HeapDAGStorageProvider implements DAGStorageProvider {
 
     private TreeCache treeCache;
 
-    HeapDAGStorageProvider(ObjectStore source) {
+    public HeapDAGStorageProvider(ObjectStore source) {
         this(source, new TreeCache(source));
     }
 
-    HeapDAGStorageProvider(ObjectStore source, TreeCache treeCache) {
+    public HeapDAGStorageProvider(ObjectStore source, TreeCache treeCache) {
         this.source = source;
         this.treeCache = treeCache;
         this.nodes = new ConcurrentHashMap<>();
@@ -91,14 +90,14 @@ class HeapDAGStorageProvider implements DAGStorageProvider {
     }
 
     @Override
-    public Map<NodeId, Node> getNodes(final Set<NodeId> nodeIds) {
+    public List<Node> getNodes(final Set<NodeId> nodeIds) {
 
-        Map<NodeId, Node> res = new HashMap<>();
+        List<Node> res = new ArrayList<>();
         nodeIds.forEach((nid) -> {
             DAGNode dagNode = nodes.get(nid);
             Preconditions.checkState(dagNode != null);
             Node node = dagNode.resolve(treeCache);
-            res.put(nid, node);
+            res.add(node);
         });
         return res;
     }

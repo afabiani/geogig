@@ -9,26 +9,27 @@
  */
 package org.locationtech.geogig.model.internal;
 
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharsetEncoder;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import org.lmdbjava.Dbi;
 import org.lmdbjava.Env;
 import org.lmdbjava.Txn;
+import org.locationtech.geogig.model.internal.ByteArrayOutputStreamPool.InternalByteArrayOutputStream;
 
 import com.google.common.base.Charsets;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
@@ -44,130 +45,121 @@ class LMDBNodeStore {
 
     private @NonNull DirectByteBufferPool valuebuffers;
 
+    private @NonNull ByteArrayOutputStreamPool streams;
+
+    private final CharArrayPool chars = new CharArrayPool();
+
     private final int dirtyThreshold = 100_000;
 
-    private final Map<NodeId, DAGNode> dirty = new ConcurrentHashMap<>();
-
-    private final ExecutorService storeExecutor = Executors.newFixedThreadPool(16);
+    private final Map<String, DAGNode> dirty = new ConcurrentHashMap<>();
 
     public void close() {
         env = null;
         db = null;
-        storeExecutor.shutdownNow();
     }
 
     public DAGNode get(NodeId nodeId) {
-        DAGNode node = dirty.get(nodeId);
-        if (node == null) {
-            ByteBuffer value;
-            try (Txn<ByteBuffer> tx = env.txnRead()) {
-                value = db.get(tx, toKey(nodeId));
-                if (value == null) {
-                    throw new NoSuchElementException("Node " + nodeId + " not found");
-                }
+        ByteBuffer value;
+        try (Txn<ByteBuffer> tx = env.txnRead()) {
+            value = db.get(tx, toKey(nodeId.name()));
+            if (value == null) {
+                throw new NoSuchElementException("Node " + nodeId + " not found");
             }
-            node = decode(value);
         }
+        DAGNode node = decode(value);
         return node;
     }
 
-    public Map<NodeId, DAGNode> getAll(Set<NodeId> nodeIds) {
+    public List<DAGNode> getAll(Set<NodeId> nodeIds) {
         if (nodeIds.isEmpty()) {
-            return ImmutableMap.of();
-        }
-        storeExecutor.shutdown();
-        while (!storeExecutor.isTerminated()) {
-            try {
-                storeExecutor.awaitTermination(100, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-                throw new RuntimeException(e);
-            }
+            return Collections.emptyList();
         }
 
-        Map<NodeId, DAGNode> res = new HashMap<>();
+        List<DAGNode> res = new ArrayList<>();
         try (Txn<ByteBuffer> tx = env.txnRead()) {
             for (NodeId id : nodeIds) {
-                DAGNode dirtyNode = dirty.get(id);
-                if (dirtyNode != null) {
-                    res.put(id, dirtyNode);
-                    continue;
+                DAGNode node = dirty.get(id.name());
+                if (node == null) {
+                    ByteBuffer value = db.get(tx, toKey(id.name()));
+                    if (value == null) {
+                        throw new NoSuchElementException("Node " + id + " not found");
+                    }
+                    node = decode(value);
                 }
-                ByteBuffer value = db.get(tx, toKey(id));
-                if (value == null) {
-                    throw new NoSuchElementException("Node " + id + " not found");
-                }
-                res.put(id, decode(value));
+                res.add(node);
             }
         }
         return res;
     }
 
     public void put(NodeId nodeId, DAGNode node) {
-        dirty.put(nodeId, node);
+        dirty.put(nodeId.name(), node);
         if (dirty.size() >= dirtyThreshold) {
             flush();
         }
     }
 
-    private void flush() {
-        HashMap<NodeId, DAGNode> map = new HashMap<>(dirty);
+    private synchronized void flush() {
+        Map<String, DAGNode> save = new HashMap<>(dirty);
         dirty.clear();
-        storeExecutor.submit(() -> {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
 
-            // Stopwatch sw = Stopwatch.createStarted();
-            try (Txn<ByteBuffer> tx = env.txnWrite()) {
-                for (Map.Entry<NodeId, DAGNode> e : map.entrySet()) {
-                    NodeId nodeId = e.getKey();
-                    DAGNode dagNode = e.getValue();
-                    ByteBuffer key = toKey(nodeId);
+        try (Txn<ByteBuffer> tx = env.txnWrite()) {
+            for (Map.Entry<String, DAGNode> e : save.entrySet()) {
+                String nodeId = e.getKey();
+                DAGNode dagNode = e.getValue();
+                ByteBuffer key = toKey(nodeId);
 
-                    out.reset();
-                    ByteBuffer value = encode(dagNode, out);
-                    db.put(tx, key, value);
-                }
-                tx.commit();
-            } catch (RuntimeException e) {
-                e.printStackTrace();
-                throw e;
+                ByteBuffer value = encode(dagNode);
+                db.put(tx, key, value);
             }
-        });
-        // System.out.printf("\nflushed %,d nodes in %s\n", map.size(), sw.stop());
+            tx.commit();
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            throw e;
+        }
     }
 
-    public void putAll(Map<NodeId, DAGNode> nodeMappings) {
-        dirty.putAll(nodeMappings);
+    public synchronized void putAll(Map<NodeId, DAGNode> map) {
+        map.forEach((id, node) -> dirty.put(id.name(), node));
         if (dirty.size() >= dirtyThreshold) {
             flush();
         }
     }
 
-    private ByteBuffer toKey(NodeId nodeId) {
-        byte[] raw = nodeId.name().getBytes(Charsets.UTF_8);
-        ByteBuffer key = keybuffers.get().ensureCapacity(raw.length);
-        key.put(raw).flip();
+    private ByteBuffer toKey(String name) {
+        CharsetEncoder encoder = Charsets.UTF_8.newEncoder();
+        char[] buff = chars.get(name.length());
+        name.getChars(0, name.length(), buff, 0);
+        CharBuffer in = CharBuffer.wrap(buff, 0, name.length());
+
+        ByteBuffer out = ByteBuffer.wrap(streams.get(2 * name.length()));
+        encoder.encode(in, out, true);
+        int encodedSize = out.position();
+
+        ByteBuffer key = keybuffers.get().ensureCapacity(encodedSize);
+        out.flip();
+        key.put(out);
+        key.flip();
         return key;
     }
 
-    private ByteBuffer encode(DAGNode node, ByteArrayOutputStream outstream) {
-        byte[] raw = rawEncode(node, outstream);
-        ByteBuffer buff = valuebuffers.get().ensureCapacity(raw.length);
-        buff.put(raw).flip();
+    private ByteBuffer encode(DAGNode node) {
+        InternalByteArrayOutputStream raw = rawEncode(node);
+        ByteBuffer buff = valuebuffers.get().ensureCapacity(raw.size());
+        buff.put(raw.intenal(), 0, raw.size()).flip();
         return buff;
     }
 
-    private byte[] rawEncode(DAGNode node, ByteArrayOutputStream outstream) {
-
-        DataOutputStream out = new DataOutputStream(outstream);
+    private InternalByteArrayOutputStream rawEncode(DAGNode node) {
+        InternalByteArrayOutputStream buff = streams.get();
+        DataOutputStream out = new DataOutputStream(buff);
         try {
             DAGNode.encode(node, out);
             out.flush();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        byte[] raw = outstream.toByteArray();
-        return raw;
+        return buff;
     }
 
     private DAGNode decode(ByteBuffer nodeData) {

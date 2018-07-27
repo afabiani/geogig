@@ -17,7 +17,6 @@ import org.locationtech.geogig.model.Node;
 import org.locationtech.geogig.model.ObjectId;
 import org.locationtech.geogig.model.RevTree;
 import org.locationtech.geogig.storage.datastream.FormatCommonV2_2;
-import org.locationtech.geogig.storage.datastream.Varint;
 
 abstract class DAGNode {
 
@@ -50,7 +49,7 @@ abstract class DAGNode {
             final ObjectId leafRevTreeId = ln.leafRevTreeId;
             final int nodeIndex = ln.nodeIndex;
             leafRevTreeId.writeTo(output);
-            Varint.writeUnsignedVarInt(nodeIndex, output);
+            output.writeInt(nodeIndex);
         }
 
     }
@@ -64,13 +63,13 @@ abstract class DAGNode {
         }
         case MAGIC_LAZY_TREE: {
             ObjectId treeCacheId = ObjectId.readFrom(in);
-            int nodeIndex = Varint.readUnsignedVarInt(in);
+            int nodeIndex = in.readInt();
             DAGNode node = DAGNode.treeNode(treeCacheId, nodeIndex);
             return node;
         }
         case MAGIC_LAZY_FEATURE: {
             ObjectId treeCacheId = ObjectId.readFrom(in);
-            int nodeIndex = Varint.readUnsignedVarInt(in);
+            int nodeIndex = in.readInt();
             DAGNode node = DAGNode.featureNode(treeCacheId, nodeIndex);
             return node;
         }

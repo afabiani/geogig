@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.eclipse.jdt.annotation.Nullable;
 import org.locationtech.geogig.model.Node;
@@ -23,7 +24,7 @@ import org.locationtech.geogig.model.RevTree;
 import org.locationtech.geogig.storage.ObjectStore;
 
 import com.google.common.base.Throwables;
-import com.google.common.collect.Maps;
+import com.google.common.collect.Lists;
 
 class RocksdbDAGStorageProvider implements DAGStorageProvider {
 
@@ -37,11 +38,11 @@ class RocksdbDAGStorageProvider implements DAGStorageProvider {
 
     private final RocksdbDAGStore dagStore;
 
-    RocksdbDAGStorageProvider(ObjectStore source) {
+    public RocksdbDAGStorageProvider(ObjectStore source) {
         this(source, new TreeCache(source));
     }
 
-    RocksdbDAGStorageProvider(ObjectStore source, TreeCache treeCache) {
+    public RocksdbDAGStorageProvider(ObjectStore source, TreeCache treeCache) {
         this.objectStore = source;
         this.treeCache = treeCache;
         Path dagDbDir = null;
@@ -77,7 +78,7 @@ class RocksdbDAGStorageProvider implements DAGStorageProvider {
     }
 
     @Override
-    public List<DAG> getTrees(Set<TreeId> ids, List<DAG> target) throws NoSuchElementException{
+    public List<DAG> getTrees(Set<TreeId> ids, List<DAG> target) throws NoSuchElementException {
         return dagStore.getTrees(ids, target);
     }
 
@@ -92,9 +93,9 @@ class RocksdbDAGStorageProvider implements DAGStorageProvider {
     }
 
     @Override
-    public Map<NodeId, Node> getNodes(final Set<NodeId> nodeIds) {
-        Map<NodeId, DAGNode> dagNodes = nodeStore.getAll(nodeIds);
-        return Maps.transformValues(dagNodes, (dn) -> dn.resolve(treeCache));
+    public List<Node> getNodes(final Set<NodeId> nodeIds) {
+        List<DAGNode> dagNodes = nodeStore.getAll(nodeIds);
+        return dagNodes.stream().map(dn -> dn.resolve(treeCache)).collect(Collectors.toList());
     }
 
     @Override

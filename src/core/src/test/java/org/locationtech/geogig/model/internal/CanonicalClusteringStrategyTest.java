@@ -514,9 +514,9 @@ public abstract class CanonicalClusteringStrategyTest {
 
     private List<Node> toNode(List<NodeId> nodeIds) {
 
-        SortedMap<NodeId, Node> nodes = strategy.getNodes(new HashSet<>(nodeIds));
+        List<Node> nodes = strategy.getNodes(new HashSet<>(nodeIds));
         assertEquals(nodeIds.size(), nodes.size());
-        return new ArrayList<>(nodes.values());
+        return nodes;
     }
 
     private List<NodeId> flatten(DAG root) {

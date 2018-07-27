@@ -12,23 +12,23 @@ package org.locationtech.geogig.model.internal;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import org.rocksdb.BlockBasedTableConfig;
-import org.rocksdb.BloomFilter;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
 import com.google.common.base.Charsets;
@@ -47,7 +47,7 @@ class RocksdbNodeStore {
 
     private ColumnFamilyHandle column;
 
-    private BloomFilter bloomFilter;
+    // private BloomFilter bloomFilter;
 
     private ColumnFamilyOptions colFamilyOptions;
 
@@ -56,7 +56,7 @@ class RocksdbNodeStore {
         try {
             // enable bloom filter to speed up RocksDB.get() calls
             BlockBasedTableConfig tableFormatConfig = new BlockBasedTableConfig();
-            bloomFilter = new BloomFilter();
+            // bloomFilter = new BloomFilter();
             // tableFormatConfig.setFilter(bloomFilter);
             // tableFormatConfig.setBlockSize(16*1024);
             // tableFormatConfig.setBlockCacheSize(4 * 1024 * 1024);
@@ -85,7 +85,7 @@ class RocksdbNodeStore {
         writeOptions.close();
         column.close();
         colFamilyOptions.close();
-        bloomFilter.close();
+        // bloomFilter.close();
         db = null;
     }
 
@@ -103,7 +103,7 @@ class RocksdbNodeStore {
         return decode(value);
     }
 
-    public Map<NodeId, DAGNode> getAll(Set<NodeId> nodeIds) {
+    public Map<NodeId, DAGNode> getAllOOM(Set<NodeId> nodeIds) {
         if (nodeIds.isEmpty()) {
             return ImmutableMap.of();
         }
@@ -126,11 +126,11 @@ class RocksdbNodeStore {
         return res;
     }
 
-    public Map<NodeId, DAGNode> getAllOld(Set<NodeId> nodeIds) {
+    public List<DAGNode> getAll(Set<NodeId> nodeIds) {
         if (nodeIds.isEmpty()) {
-            return ImmutableMap.of();
+            return Collections.emptyList();
         }
-        Map<NodeId, DAGNode> res = new HashMap<>();
+        List<DAGNode> res = new ArrayList<>();
         byte[] valueBuff = new byte[512];
         try {
             for (NodeId id : nodeIds) {
@@ -142,7 +142,7 @@ class RocksdbNodeStore {
                     val = db.get(column, key);
                 }
                 DAGNode node = decode(val);
-                res.put(id, node);
+                res.add(node);
             }
         } catch (RocksDBException e) {
             throw new RuntimeException(e);
@@ -162,18 +162,19 @@ class RocksdbNodeStore {
 
     public void putAll(Map<NodeId, DAGNode> nodeMappings) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-
-        nodeMappings.forEach((nodeId, dagNode) -> {
-            out.reset();
-            encode(dagNode, out);
-            byte[] value = out.toByteArray();
-            byte[] key = toKey(nodeId);
-            try {
-                db.put(column, writeOptions, key, value);
-            } catch (RocksDBException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        try (WriteBatch batch = new WriteBatch()) {
+            nodeMappings.forEach((nodeId, dagNode) -> {
+                out.reset();
+                encode(dagNode, out);
+                byte[] value = out.toByteArray();
+                byte[] key = toKey(nodeId);
+                batch.put(column, key, value);
+            });
+            db.write(writeOptions, batch);
+            // db.put(column, writeOptions, key, value);
+        } catch (RocksDBException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private byte[] toKey(NodeId nodeId) {

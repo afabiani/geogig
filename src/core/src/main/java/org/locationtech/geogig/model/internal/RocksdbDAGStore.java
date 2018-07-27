@@ -20,7 +20,6 @@ import java.util.Set;
 import org.eclipse.jdt.annotation.Nullable;
 import org.locationtech.geogig.model.ObjectId;
 import org.rocksdb.BlockBasedTableConfig;
-import org.rocksdb.BloomFilter;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
@@ -47,7 +46,7 @@ class RocksdbDAGStore {
 
     private ColumnFamilyHandle column;
 
-    private BloomFilter bloomFilter;
+    // private BloomFilter bloomFilter;
 
     private ColumnFamilyOptions colFamilyOptions;
 
@@ -56,7 +55,7 @@ class RocksdbDAGStore {
         try {
             // enable bloom filter to speed up RocksDB.get() calls
             BlockBasedTableConfig tableFormatConfig = new BlockBasedTableConfig();
-            bloomFilter = new BloomFilter();
+            // bloomFilter = new BloomFilter();
             // tableFormatConfig.setFilter(bloomFilter);
             // tableFormatConfig.setBlockSize(64 * 1024);
             // tableFormatConfig.setBlockCacheSize(4 * 1024 * 1024);
@@ -83,7 +82,7 @@ class RocksdbDAGStore {
         readOptions.close();
         writeOptions.close();
         column.close();
-        bloomFilter.close();
+        // bloomFilter.close();
         colFamilyOptions.close();
         db = null;
     }

@@ -37,6 +37,7 @@ import org.locationtech.geogig.storage.AutoCloseableIterator;
 import org.locationtech.geogig.storage.BulkOpListener;
 import org.locationtech.geogig.storage.ObjectInfo;
 import org.locationtech.geogig.storage.ObjectStore;
+import org.locationtech.geogig.storage.datastream.v2_3.DataStreamSerializationFactoryV2_3;
 import org.locationtech.geogig.storage.impl.AbstractObjectStore;
 
 import com.google.common.base.Stopwatch;
@@ -61,6 +62,7 @@ public class LMDBObjectStore extends AbstractObjectStore implements ObjectStore 
     private Dbi<ByteBuffer> db;
 
     public LMDBObjectStore(final @NonNull File directory, final @NonNull String dbName) {
+//        super(DataStreamSerializationFactoryV2_3.INSTANCE);
         this.directory = directory;
         this.dbName = dbName;
 
@@ -69,7 +71,8 @@ public class LMDBObjectStore extends AbstractObjectStore implements ObjectStore 
     public synchronized @Override void open() {
         if (!isOpen()) {
             env = Env.create()//
-                    .setMapSize(1 * 1024L * 1024 * 1024 * 1024)//
+                    .setMapSize(100L * 1024 * 1024 * 1024)//
+                    .setMaxReaders(128)//
                     .setMaxDbs(1)//
                     .open(directory, EnvFlags.MDB_WRITEMAP, EnvFlags.MDB_MAPASYNC);// ,
                                                                                    // EnvFlags.MDB_NOMETASYNC,
@@ -372,7 +375,6 @@ public class LMDBObjectStore extends AbstractObjectStore implements ObjectStore 
         checkState(isOpen(), "db is closed");
     }
 
-   
     private static final class InternalBAOS extends ByteArrayOutputStream {
         InternalBAOS() {
             super(4096);
